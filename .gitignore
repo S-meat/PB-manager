@@ -1,0 +1,5 @@
+# Google Drive デスクトップ同期のショートカットファイル（実体はGoogle側にあるためリポジトリ管理外）
+*.gsheet
+*.gdoc
+*.gslides
+*.gdraw
