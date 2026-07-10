@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PB商品 受発注管理</title>
+<style>
+:root{
+  --bg:#f5f5f3; --surface:#ffffff;
+  --border:#e0e0de; --border-strong:#c8c8c5;
+  --ink:#1a1a18; --sub:#6b6b68; --muted:#9b9b98;
+  --fill-soft:#efefed; --fill-mid:#e6e6e3;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08);
+  --shadow-md:0 4px 12px rgba(0,0,0,.10);
+  --radius:8px; --radius-lg:12px;
+  font-size:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;line-height:1.6;min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
+
+.app-header{background:var(--surface);border-bottom:2px solid var(--ink);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:0;z-index:20}
+.app-header .brand{display:flex;align-items:center;gap:8px;min-width:0}
+.app-header .brand img{width:28px;height:28px;flex-shrink:0}
+.app-header h1{font-size:1.02rem;font-weight:800;letter-spacing:.03em}
+.app-header h1 small{display:block;font-size:.66rem;font-weight:500;color:var(--sub)}
+.hbtns{display:flex;gap:8px;flex-shrink:0}
+.hbtn{background:var(--surface);border:1px solid var(--border-strong);color:var(--ink);border-radius:var(--radius);padding:8px 13px;font-size:.78rem;font-weight:600;cursor:pointer;min-height:40px;white-space:nowrap}
+.hbtn:hover{background:var(--fill-soft)}
+.hbtn:disabled{opacity:.5}
+#banner{background:var(--fill-mid);border-bottom:1px solid var(--border-strong);color:var(--sub);font-size:.74rem;padding:7px 20px;display:none}
+
+nav{display:flex;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:57px;z-index:19}
+nav button{flex:1;padding:12px 6px;border:none;background:none;font-family:inherit;font-size:.84rem;font-weight:600;color:var(--sub);cursor:pointer;border-bottom:3px solid transparent;min-height:48px}
+nav button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:800}
+nav .ico{display:none}
+@media(max-width:680px){
+  nav{position:fixed;top:auto;bottom:0;left:0;right:0;border-top:1px solid var(--border-strong);border-bottom:none;box-shadow:0 -2px 10px rgba(0,0,0,.06);padding-bottom:env(safe-area-inset-bottom)}
+  nav button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;font-size:.6rem;border-bottom:none;border-top:3px solid transparent;min-height:56px}
+  nav button.on{border-top-color:var(--ink)}
+  nav .ico{display:block;width:22px;height:22px}
+  nav .ico svg{width:100%;height:100%;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+}
+
+main{max-width:1080px;margin:0 auto;padding:16px 14px 40px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:14px;box-shadow:var(--shadow-sm)}
+.card h2{font-size:.95rem;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2::before{content:"";width:4px;height:16px;background:var(--ink);border-radius:2px}
+.card h2 .cnt{background:var(--fill-soft);color:var(--sub);border-radius:99px;padding:1px 10px;font-size:.75rem;font-weight:700}
+.note{color:var(--sub);font-size:.78rem;line-height:1.7}
+
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow-sm)}
+.kpi .n{font-size:2rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:.72rem;color:var(--sub);margin-top:3px;font-weight:600}
+.kpi.hot{background:var(--ink);border-color:var(--ink)}
+.kpi.hot .n{color:#fff}.kpi.hot .l{color:rgba(255,255,255,.75)}
+@media(max-width:680px){.kpis{gap:8px}.kpi{padding:12px}.kpi .n{font-size:1.6rem}}
+
+.tag{display:inline-flex;align-items:center;gap:3px;border-radius:99px;padding:3px 12px;font-size:.72rem;font-weight:800;white-space:nowrap;line-height:1.4}
+.tag.alert{background:var(--ink);color:#fff}
+.tag.soon{background:var(--fill-mid);color:var(--ink);border:1px solid var(--border-strong)}
+.tag.ok{background:var(--surface);color:var(--sub);border:1px solid var(--border)}
+.tag.gray{background:var(--surface);color:var(--muted);border:1px dashed var(--border-strong)}
+
+.btn{background:var(--ink);color:#fff;border:1px solid var(--ink);border-radius:var(--radius);padding:11px 18px;font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer;min-height:44px}
+.btn:hover{background:#333331}
+.btn.sub{background:var(--surface);color:var(--ink);border-color:var(--border-strong)}
+.btn.sub:hover{background:var(--fill-soft)}
+.btn.sm{padding:8px 14px;font-size:.78rem;min-height:38px}
+.btn.ghost{background:none;border-color:transparent;color:var(--sub);text-decoration:underline;min-height:38px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,.hbtn:focus-visible,nav button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+input,select{font-family:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--ink);min-height:44px}
+input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
+
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -18px;padding:0 18px}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{background:var(--fill-soft);color:var(--sub);text-align:left;padding:9px 10px;font-size:.72rem;font-weight:700;white-space:nowrap;border-bottom:1px solid var(--border-strong)}
+td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle;font-variant-numeric:tabular-nums}
+tr:hover td{background:#fafaf8}
+.sticky1{position:sticky;left:0;background:var(--surface);z-index:2;box-shadow:2px 0 0 var(--border)}
+th.sticky1{background:var(--fill-soft)}
+tr.dim td{color:var(--muted)}
+
+.olist{display:grid;gap:10px}
+.ocard{border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;background:var(--surface)}
+.ocard.done{opacity:.62}
+.ohead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.ohead .pn{font-size:1rem;font-weight:800}
+.ohead .pv{font-size:.72rem;color:var(--sub)}
+.ometa{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 10px}
+.ometa div{font-size:.78rem;color:var(--sub)}
+.ometa b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.oprog{height:6px;background:var(--fill-mid);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.oprog i{display:block;height:100%;background:var(--ink);border-radius:99px;transition:width .25s}
+.ostatus{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ostatus .cur{font-size:.85rem;font-weight:800}
+.ostatus .cur small{color:var(--muted);font-weight:600;margin-left:6px}
+.obtns{display:flex;gap:8px;flex-wrap:wrap}
+
+.alist{display:grid;gap:10px}
+.acard{border:1px solid var(--border-strong);border-radius:var(--radius-lg);padding:14px 16px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.acard.hot{border-color:var(--ink);border-width:2px}
+.acard .info{flex:1;min-width:180px}
+.acard .pn{font-weight:800;font-size:.95rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.acard .detail{font-size:.76rem;color:var(--sub);margin-top:4px;line-height:1.7}
+.acard .detail b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+.spark{display:flex;align-items:flex-end;gap:2px;height:34px}
+.spark i{width:8px;background:var(--ink);opacity:.82;border-radius:2px 2px 0 0;display:block;min-height:2px}
+.spark i.pred{background:var(--surface);border:1.5px dashed var(--border-strong);opacity:1}
+.spark .sep{width:1px;height:100%;background:var(--border-strong);margin:0 3px}
+
+.seg{display:flex;background:var(--fill-soft);border:1px solid var(--border-strong);border-radius:var(--radius);padding:3px;gap:3px;margin-bottom:14px}
+.seg button{flex:1;border:none;background:none;font-family:inherit;font-size:.85rem;font-weight:700;color:var(--sub);padding:10px 6px;border-radius:6px;cursor:pointer;min-height:44px}
+.seg button.on{background:var(--ink);color:#fff}
+
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.frm label{display:flex;flex-direction:column;gap:5px;font-size:.74rem;font-weight:700;color:var(--sub)}
+.frm label.wide{grid-column:1/-1}
+.frm input,.frm select{width:100%}
+
+.loglist{display:grid;gap:0}
+.logrow{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.logrow .d{font-size:.76rem;color:var(--sub);min-width:78px;font-variant-numeric:tabular-nums}
+.logrow .p{font-weight:700;font-size:.85rem;flex:1;min-width:120px}
+.logrow .q{font-weight:800;font-variant-numeric:tabular-nums}
+.logrow .u{font-size:.72rem;color:var(--muted)}
+
+.plist{display:grid;gap:10px}
+.pcard{border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;background:var(--surface)}
+.pcard.retired{opacity:.65}
+.phead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.phead .pn{font-weight:800;font-size:.95rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pdetail{font-size:.76rem;color:var(--sub);margin:6px 0 10px;line-height:1.8}
+.pdetail b{color:var(--ink)}
+.pbtns{display:flex;gap:8px;flex-wrap:wrap}
+
+.empty{text-align:center;padding:34px 14px;color:var(--muted);font-size:.85rem;line-height:1.8}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.72rem;color:var(--sub);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+dialog{border:none;border-radius:var(--radius-lg);padding:22px;max-width:560px;width:94%;box-shadow:var(--shadow-md);max-height:90vh;overflow-y:auto}
+dialog::backdrop{background:rgba(26,26,24,.45)}
+dialog h3{font-size:1rem;font-weight:800;margin-bottom:14px}
+.dfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);color:#fff;padding:10px 20px;border-radius:99px;font-size:.82rem;font-weight:700;opacity:0;pointer-events:none;transition:opacity .25s;z-index:50;box-shadow:var(--shadow-md)}
+#toast.show{opacity:1}
+@media(min-width:681px){#toast{bottom:30px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="brand">
+    <img src="assets/logo.png" alt="" width="34" height="34">
+    <h1>PB商品 受発注管理<small id="syncinfo">起動中…</small></h1>
+  </div>
+  <div class="hbtns">
+    <button class="hbtn" id="btnSync" onclick="refresh()">更新</button>
+    <button class="hbtn" onclick="exportJSON()">控え保存</button>
+  </div>
+</header>
+<div id="banner"></div>
+
+<nav id="nav"></nav>
+
+<main>
+  <section id="v-dash"></section>
+  <section id="v-orders" style="display:none"></section>
+  <section id="v-fcast" style="display:none"></section>
+  <section id="v-io" style="display:none"></section>
+  <section id="v-master" style="display:none"></section>
+</main>
+
+<dialog id="dlgOrder">
+  <h3>新規発注の登録</h3>
+  <div class="frm">
+    <label class="wide">商品<select id="oProd"></select></label>
+    <label>発注日<input type="date" id="oDate"></label>
+    <label>数量<input type="number" id="oQty" min="0" placeholder="例: 500"></label>
+    <label class="wide">原料発送・引渡指定日（判明後の入力でも可）<input type="date" id="oMat"></label>
+    <label class="wide">備考<input type="text" id="oMemo" placeholder="任意"></label>
+  </div>
+  <div class="dfoot">
+    <button class="btn sub" onclick="dlgOrder.close()">キャンセル</button>
+    <button class="btn" onclick="submitOrder()">登録する</button>
+  </div>
+</dialog>
+
+<dialog id="dlgProd">
+  <h3 id="pdTitle">商品を追加</h3>
+  <div class="frm">
+    <label class="wide">商品名 *<input type="text" id="pName" placeholder="例: GP新商品"></label>
+    <label>カテゴリ<input type="text" id="pCat" placeholder="例: 冷凍惣菜"></label>
+    <label>状態<select id="pStatus"><option>販売中</option><option>終売</option></select></label>
+    <label class="wide">発注起点<input type="text" id="pTrigger" placeholder="例: 発注点管理／本店精肉・月初／年間スケジュール"></label>
+    <label>発注窓口<input type="text" id="pVendor"></label>
+    <label>実製造元<input type="text" id="pMaker"></label>
+    <label class="wide">原料の渡し方<input type="text" id="pMaterial"></label>
+    <label>納品先<input type="text" id="pDest" placeholder="例: 横浜冷凍"></label>
+    <label>リードタイム（日）<input type="number" id="pLt" min="0" placeholder="例: 30"></label>
+    <label>完成報告<select id="pReport"><option>なし</option><option>メールあり</option><option>メールあり（2社）</option><option>－</option></select></label>
+    <label class="wide">備考<input type="text" id="pMemo"></label>
+  </div>
+  <div class="dfoot">
+    <button class="btn sub" onclick="dlgProd.close()">キャンセル</button>
+    <button class="btn" onclick="submitProduct()">保存する</button>
+  </div>
+</dialog>
+
+<div id="toast" role="status"></div>
+
+<script>
+// ============================================================
+// GAS連携設定：デプロイしたウェブアプリのURLをここに貼り付け
+// 例: const GAS_URL = "https://script.google.com/macros/s/XXXX/exec";
+// 空のままの場合は「ローカル試用モード」（この端末のみに保存）で動作
+// ============================================================
+const GAS_URL = "";
+
+const STATUSES = ["発注済","原料手配中","原料発送・引渡済","製造中","完成報告受領","入庫依頼済","納品完了"];
+
+// ローカル試用モード用の初期マスタ（本番はスプレッドシートの商品マスタが正）
+const SEED_MASTER = [
+ {pid:"P01",name:"GPコロッケ",cat:"冷凍惣菜",status:"販売中",trigger:"発注点管理",vendor:"篠原食品",maker:"サンマルコ食品",material:"製造部が発送",dest:"横浜冷凍",lt:45,report:"なし",memo:""},
+ {pid:"P02",name:"GPメンチ",cat:"冷凍惣菜",status:"販売中",trigger:"発注点管理",vendor:"福島食品",maker:"コスミックSY",material:"福島食品へ引き渡し",dest:"横浜冷凍",lt:30,report:"なし",memo:""},
+ {pid:"P03",name:"GPベーコンクリーム",cat:"冷凍惣菜",status:"販売中",trigger:"発注点管理",vendor:"篠原食品",maker:"サンマルコ食品",material:"製造部が発送",dest:"横浜冷凍",lt:45,report:"なし",memo:"移行時に棚卸確認"},
+ {pid:"P04",name:"GP豚まん",cat:"冷凍惣菜",status:"販売中",trigger:"発注点管理",vendor:"福島食品",maker:"菅野製麺所",material:"福島食品へ引き渡し",dest:"横浜冷凍",lt:30,report:"なし",memo:"1ケース32個入"},
+ {pid:"P05",name:"GP焼売",cat:"冷凍惣菜",status:"販売中",trigger:"発注点管理",vendor:"福島食品",maker:"菅野製麺所",material:"福島食品へ引き渡し",dest:"横浜冷凍",lt:30,report:"なし",memo:""},
+ {pid:"P06",name:"GPハンバーグ",cat:"冷凍惣菜",status:"販売中",trigger:"本店精肉・月初",vendor:"門崎（直接）",maker:"門崎",material:"指定着日に発送",dest:"横浜冷凍",lt:30,report:"メールあり",memo:"個包装"},
+ {pid:"P07",name:"炙りもつ",cat:"冷凍惣菜",status:"販売中",trigger:"本店精肉・月初",vendor:"栗山ノーサン（直接）",maker:"栗山ノーサン",material:"指定着日に発送",dest:"横浜冷凍",lt:30,report:"メールあり",memo:""},
+ {pid:"P08",name:"炙り豚足",cat:"冷凍惣菜",status:"販売中",trigger:"本店精肉・月初",vendor:"栗山ノーサン（直接）",maker:"栗山ノーサン",material:"指定着日に発送",dest:"横浜冷凍",lt:30,report:"メールあり",memo:"直納扱い"},
+ {pid:"P09",name:"豚丼の具",cat:"レトルト・チルド",status:"販売中",trigger:"年間スケジュール",vendor:"J・ヘルスフーズ",maker:"マルコ岩村",material:"ピースフル様へ引渡→チャーター便引取",dest:"横浜冷凍",lt:30,report:"メールあり",memo:"直納扱い"},
+ {pid:"P10",name:"レトルトモツ煮",cat:"レトルト",status:"販売中",trigger:"年間スケジュール",vendor:"ウエハラHC（J・ヘルスフーズへ報告）",maker:"ウエハラHC",material:"製造部冷凍庫からランテック便引取",dest:"横浜冷凍",lt:30,report:"メールあり（2社）",memo:""},
+ {pid:"P11",name:"レトルトバラ軟骨",cat:"レトルト",status:"販売中",trigger:"年間スケジュール",vendor:"ウエハラHC（J・ヘルスフーズへ報告）",maker:"ウエハラHC",material:"製造部冷凍庫からランテック便引取",dest:"横浜冷凍",lt:30,report:"メールあり（2社）",memo:""},
+ {pid:"P12",name:"GPカレー",cat:"レトルト",status:"販売中",trigger:"本店食品が発注",vendor:"誠光産業",maker:"誠光産業",material:"営業支援課へ引渡→営業支援課が発送",dest:"指定先",lt:30,report:"なし",memo:""},
+ {pid:"P13",name:"生ジャーキー",cat:"加工品",status:"販売中",trigger:"年間スケジュール",vendor:"栗山ノーサン",maker:"栗山ノーサン",material:"製造部が原料出庫（引取）",dest:"本店",lt:30,report:"－",memo:""},
+ {pid:"P14",name:"GP角煮",cat:"レトルト・チルド",status:"販売中",trigger:"（発注フロー要確認）",vendor:"（要確認）",maker:"（要確認）",material:"（要確認）",dest:"横浜冷凍",lt:30,report:"－",memo:"直納扱い。発注フロー要確認"},
+ {pid:"P15",name:"GPハムナゲット",cat:"冷凍惣菜",status:"終売",trigger:"－",vendor:"－",maker:"－",material:"－",dest:"横浜冷凍",lt:0,report:"－",memo:"在庫限りで終売。出庫のみ"},
+ {pid:"P16",name:"GPロースハムコロッケ",cat:"冷凍惣菜",status:"終売",trigger:"－",vendor:"－",maker:"－",material:"－",dest:"横浜冷凍",lt:0,report:"－",memo:"在庫限りで終売。出庫のみ"},
+ {pid:"P17",name:"MMまん（焼印付）",cat:"冷凍惣菜",status:"終売",trigger:"－",vendor:"－",maker:"－",material:"－",dest:"横浜冷凍",lt:0,report:"－",memo:"取扱終了"},
+ {pid:"P18",name:"GPピザ",cat:"冷凍惣菜",status:"終売",trigger:"－",vendor:"－",maker:"－",material:"－",dest:"横浜冷凍",lt:0,report:"－",memo:"取扱終了"},
+ {pid:"P19",name:"GPハンバーグ（業務用）",cat:"冷凍惣菜",status:"終売",trigger:"－",vendor:"－",maker:"－",material:"－",dest:"横浜冷凍",lt:0,report:"－",memo:"取扱終了"},
+];
+
+// ================= 状態管理 =================
+let S = { master:[], stock:{}, monthly:{}, orders:[], recentLogs:[], settings:{"安全在庫月数":"0.5"}, serverTime:null };
+let LOCAL = { logs:[], orders:[], master: JSON.parse(JSON.stringify(SEED_MASTER)) };
+let ONLINE = false;
+
+let mem = {};
+const store = {
+  get(k){ try{ return localStorage.getItem(k) }catch(e){ return mem[k] ?? null } },
+  set(k,v){ try{ localStorage.setItem(k,v) }catch(e){ mem[k]=v } }
+};
+function persistLocal(){ store.set("pblocal", JSON.stringify(LOCAL)); }
+function loadLocal(){ const r = store.get("pblocal"); if(r){ try{ LOCAL = JSON.parse(r) }catch(e){} } }
+function cacheServer(){ store.set("pbcache", JSON.stringify(S)); }
+function loadCache(){ const r = store.get("pbcache"); if(r){ try{ S = JSON.parse(r); return true }catch(e){} } return false; }
+
+function safety(){ return Number(S.settings?.["安全在庫月数"]) || 0.5; }
+
+// ================= ユーティリティ =================
+function ym(offset){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function last12(){ return Array.from({length:12},(_,i)=>ym(i-11)); }
+function fmtD(s){ if(!s) return "－"; const d=new Date(s); if(isNaN(d)) return "－"; return (d.getMonth()+1)+"/"+d.getDate(); }
+function today(){ return new Date().toISOString().slice(0,10); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function prod(pid){ return S.master.find(p=>p.pid===pid); }
+function salesOf(pid){ const m = (S.monthly&&S.monthly[pid])||{}; return last12().map(k=>Number(m[k]||0)); }
+function activeProds(){ return S.master.filter(p=>p.status==="販売中"); }
+function retiredWithStock(){ return S.master.filter(p=>p.status==="終売" && (S.stock[p.pid]||0)>0); }
+
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),1900);
+}
+
+// ================= サーバー通信／ローカル反映 =================
+async function serverCall(payload){
+  const opt = payload ? {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body:JSON.stringify(payload)} : undefined;
+  const res = await fetch(GAS_URL, opt);
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  return await res.json();
+}
+function applyServer(j){ if(!j || !j.ok) throw new Error("bad response"); S=j; ONLINE=true; cacheServer(); syncUI(); }
+
+async function refresh(){
+  if(!GAS_URL){ buildStateLocal(); syncUI(); rerender(); toast("ローカルデータを再読込しました"); return; }
+  const btn=document.getElementById("btnSync"); btn.disabled=true; btn.textContent="更新中…";
+  try{ applyServer(await serverCall(null)); rerender(); toast("最新の状態に更新しました"); }
+  catch(e){ ONLINE=false; syncUI(); toast("サーバーに接続できません（前回データを表示中）"); }
+  finally{ btn.disabled=false; btn.textContent="更新"; }
+}
+
+async function mutate(payload, okMsg){
+  if(GAS_URL){
+    toast("送信中…");
+    try{ applyServer(await serverCall(payload)); toast(okMsg); }
+    catch(e){ alert("サーバーへの送信に失敗しました。通信環境を確認して、もう一度お試しください。"); }
+    rerender();
+  } else {
+    localMutate(payload); persistLocal(); buildStateLocal(); toast(okMsg); rerender();
+  }
+}
+
+function localMutate(q){
+  const a=q.action;
+  if(a==="addLog"){ LOCAL.logs.push({id:"L"+Date.now().toString(36),date:q.date,pid:q.pid,pname:q.pname,type:q.type,qty:Number(q.qty),lot:q.lot||"",expiry:q.expiry||"",memo:q.memo||"",user:q.user||""}); }
+  else if(a==="addOrder"){ LOCAL.orders.push({oid:"O"+Date.now().toString(36),pid:q.pid,pname:q.pname,date:q.date,qty:q.qty||"",mat:q.mat||"",status:"発注済",memo:q.memo||"",updated:today()}); }
+  else if(a==="updateOrder"){ const o=LOCAL.orders.find(x=>x.oid===q.oid); if(o){ if(q.status!==undefined)o.status=q.status; if(q.mat!==undefined)o.mat=q.mat; o.updated=today(); } }
+  else if(a==="deleteOrder"){ LOCAL.orders=LOCAL.orders.filter(x=>x.oid!==q.oid); }
+  else if(a==="addProduct"){ const maxN=Math.max(0,...LOCAL.master.map(p=>Number((p.pid.match(/^P(\d+)$/)||[])[1]||0))); LOCAL.master.push(Object.assign({pid:"P"+String(maxN+1).padStart(2,"0")},q.product,{lt:Number(q.product.lt)||0})); }
+  else if(a==="updateProduct"){ const i=LOCAL.master.findIndex(p=>p.pid===q.pid); if(i>=0) LOCAL.master[i]=Object.assign({pid:q.pid},q.product,{lt:Number(q.product.lt)||0}); }
+  else if(a==="deleteProduct"){ LOCAL.master=LOCAL.master.filter(p=>p.pid!==q.pid); }
+}
+
+function buildStateLocal(){
+  const stock={}, monthly={};
+  const keys=new Set(last12());
+  LOCAL.logs.forEach(l=>{
+    const q=Number(l.qty)||0;
+    stock[l.pid]=(stock[l.pid]||0)+(l.type==="出庫"?-q:q);
+    if(l.type==="出庫"){ const k=String(l.date).slice(0,7); if(keys.has(k)){ if(!monthly[l.pid])monthly[l.pid]={}; monthly[l.pid][k]=(monthly[l.pid][k]||0)+q; } }
+  });
+  const recent=[...LOCAL.logs].reverse().slice(0,25);
+  S={ master:LOCAL.master, stock, monthly, orders:LOCAL.orders, recentLogs:recent, settings:S.settings, serverTime:null };
+}
+
+function syncUI(){
+  const info=document.getElementById("syncinfo"), banner=document.getElementById("banner");
+  if(!GAS_URL){
+    info.textContent="ローカル試用モード（この端末のみに保存）";
+    banner.style.display="block";
+    banner.textContent="ローカル試用モードで動作中です。セットアップ手順書に従ってGAS URLを設定すると、スプレッドシートと連携した共有運用になります。";
+  } else if(ONLINE){
+    info.textContent="スプレッドシート連携中（最終同期 "+(S.serverTime||"-")+"）";
+    banner.style.display="none";
+  } else {
+    info.textContent="オフライン（前回同期データを表示中）";
+    banner.style.display="block";
+    banner.textContent="サーバーに接続できません。表示は前回同期時点のデータです。「更新」で再接続を試せます。";
+  }
+}
+
+// ================= 予測・発注点 =================
+function forecast(pid){
+  const s=salesOf(pid);
+  const nonzero=s.filter(v=>v>0).length;
+  const avg3=s.slice(-3).reduce((a,b)=>a+b,0)/3;
+  const win=s.slice(-6); const n=win.length;
+  let slope=0;
+  if(win.filter(v=>v>0).length>=4){
+    const xm=(n-1)/2, ymean=win.reduce((a,b)=>a+b,0)/n;
+    let num=0,den=0;
+    win.forEach((v,i)=>{num+=(i-xm)*(v-ymean);den+=(i-xm)*(i-xm)});
+    slope=den?num/den:0;
+  }
+  const preds=[1,2,3].map(k=>Math.max(0,Math.round(avg3+slope*k)));
+  return {avg3:Math.round(avg3*10)/10, slope:Math.round(slope*10)/10, preds, enough:nonzero>=3};
+}
+function reorderInfo(p){
+  const f=forecast(p.pid);
+  const stock=Number(S.stock[p.pid]||0);
+  const ltM=(p.lt||0)/30;
+  const point=Math.ceil(f.avg3*(ltM+safety()));
+  const monthsLeft=f.avg3>0?Math.round(stock/f.avg3*10)/10:null;
+  let status="nodata";
+  if(p.status!=="販売中"||!p.lt) status="na";
+  else if(f.enough){ status = stock<=point?"alert":(monthsLeft!==null&&monthsLeft<=ltM+safety()+0.5?"soon":"ok"); }
+  return Object.assign({},f,{stock,point,monthsLeft,status});
+}
+
+// ================= ナビ =================
+const ICONS={
+  dash:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>',
+  orders:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2.5"/></svg>',
+  fcast:'<svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15l4-5 3 3 5-7"/></svg>',
+  io:'<svg viewBox="0 0 24 24"><path d="M8 7l-4 4 4 4"/><path d="M4 11h9"/><path d="M16 3l4 4-4 4"/><path d="M20 7h-9"/><path d="M4 21h16"/></svg>',
+  master:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg>',
+};
+const TABS=[["dash","ホーム"],["orders","発注案件"],["fcast","予測・発注点"],["io","入出庫"],["master","マスタ"]];
+document.getElementById("nav").innerHTML=TABS.map(([k,l])=>`<button data-t="${k}" onclick="tab('${k}')"><span class="ico">${ICONS[k]}</span>${l}</button>`).join("");
+
+let curTab="dash";
+function tab(t){
+  curTab=t;
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
+  ["dash","orders","fcast","io","master"].forEach(v=>document.getElementById("v-"+v).style.display=v===t?"":"none");
+  render(t); window.scrollTo({top:0});
+}
+function render(t){ ({dash:rDash,orders:rOrders,fcast:rFcast,io:rIO,master:rMaster})[t](); }
+function rerender(){ render(curTab); }
+
+// ================= ホーム =================
+function rDash(){
+  const infos=activeProds().map(p=>({p,r:reorderInfo(p)}));
+  const alerts=infos.filter(x=>x.r.status==="alert");
+  const soons=infos.filter(x=>x.r.status==="soon");
+  const active=(S.orders||[]).filter(o=>o.status!=="納品完了");
+  const nodata=infos.filter(x=>x.r.status==="nodata").length;
+  const rw=retiredWithStock();
+
+  let h=`<div class="kpis">
+    <div class="kpi ${alerts.length?'hot':''}"><div class="n">${alerts.length}</div><div class="l">★ 要発注</div></div>
+    <div class="kpi"><div class="n">${soons.length}</div><div class="l">まもなく発注</div></div>
+    <div class="kpi"><div class="n">${active.length}</div><div class="l">進行中の案件</div></div>
+  </div>`;
+
+  h+=`<div class="card"><h2>発注アラート</h2>`;
+  if(!alerts.length && !soons.length){
+    h+= nodata===infos.length
+      ? `<div class="empty">販売実績がまだ取得できていません。<br>「更新」を押すか、「入出庫」タブから出庫を登録すると発注点を自動計算します。</div>`
+      : `<div class="empty">発注点を下回っている商品はありません。</div>`;
+  }else{
+    h+=`<div class="alist">`;
+    [...alerts,...soons].forEach(({p,r})=>{
+      const tag=r.status==="alert"?`<span class="tag alert">★ 要発注</span>`:`<span class="tag soon">まもなく</span>`;
+      h+=`<div class="acard ${r.status==='alert'?'hot':''}">
+        <div class="info"><div class="pn">${esc(p.name)} ${tag}</div>
+        <div class="detail">在庫 <b>${r.stock}</b> ／ 発注点 <b>${r.point}</b> ／ 月平均販売 <b>${r.avg3}</b> ／ 残り約 <b>${r.monthsLeft??"－"}</b>か月<br>窓口：${esc(p.vendor)}（LT約${p.lt}日）</div></div>
+        <button class="btn sm" onclick="openOrder('${p.pid}')">発注を登録</button>
+      </div>`;
+    });
+    h+=`</div>`;
+  }
+  h+=`</div>`;
+
+  if(rw.length){
+    h+=`<div class="card"><h2>終売品の残在庫（出庫のみ・売切り管理）</h2><div class="alist">`;
+    rw.forEach(p=>{
+      h+=`<div class="acard"><div class="info"><div class="pn">${esc(p.name)} <span class="tag gray">終売</span></div>
+        <div class="detail">残在庫 <b>${S.stock[p.pid]||0}</b>　※今後の入庫はありません</div></div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  h+=`<div class="card"><h2>進行中の案件<span class="cnt">${active.length}</span></h2>`;
+  h+= active.length ? orderCards(active) : `<div class="empty">進行中の案件はありません。「発注案件」タブから登録できます。</div>`;
+  h+=`</div>`;
+  document.getElementById("v-dash").innerHTML=h;
+}
+
+// ================= 発注案件 =================
+function orderCards(list, done){
+  let h=`<div class="olist">`;
+  list.slice().reverse().forEach(o=>{
+    const p=prod(o.pid)||{lt:0,vendor:"",name:""};
+    const due=o.date&&p.lt?new Date(new Date(o.date).getTime()+p.lt*86400000):null;
+    const idx=Math.max(0,STATUSES.indexOf(o.status));
+    const pct=Math.round(idx/(STATUSES.length-1)*100);
+    h+=`<div class="ocard ${done?'done':''}">
+      <div class="ohead">
+        <div><div class="pn">${esc(o.pname||p.name)}</div><div class="pv">窓口：${esc(p.vendor)}</div></div>
+        ${o.status==="納品完了"?'<span class="tag ok">完了</span>':`<span class="tag soon">${idx+1} / ${STATUSES.length}</span>`}
+      </div>
+      <div class="ometa">
+        <div>発注日 <b>${fmtD(o.date)}</b></div><div>数量 <b>${esc(o.qty)||"－"}</b></div>
+        <div>原料指定日 <b>${fmtD(o.mat)}</b></div><div>完成予定 <b>${due?(due.getMonth()+1)+"/"+due.getDate():"－"}</b></div>
+        ${o.memo?`<div>備考 <b>${esc(o.memo)}</b></div>`:""}
+      </div>
+      <div class="oprog"><i style="width:${pct}%"></i></div>
+      <div class="ostatus">
+        <div class="cur">${esc(o.status)}${idx<STATUSES.length-1?`<small>次：${esc(STATUSES[idx+1])}</small>`:""}</div>
+        <div class="obtns">
+          ${idx>0?`<button class="btn sub sm" onclick="moveStatus('${o.oid}',-1)">◀ 戻す</button>`:""}
+          ${idx<STATUSES.length-1?`<button class="btn sm" onclick="moveStatus('${o.oid}',1)">次の工程へ ▶</button>`:""}
+          <button class="btn ghost sm" onclick="delOrder('${o.oid}')">削除</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  return h+`</div>`;
+}
+function rOrders(){
+  const active=(S.orders||[]).filter(o=>o.status!=="納品完了");
+  const done=(S.orders||[]).filter(o=>o.status==="納品完了");
+  let h=`<div class="card"><h2>発注案件<span class="cnt">${(S.orders||[]).length}</span></h2>
+    <div style="margin-bottom:12px"><button class="btn" onclick="openOrder()">＋ 新規発注を登録</button></div>
+    <p class="note" style="margin-bottom:12px">工程：発注済 → 原料手配中 → 原料発送・引渡済 → 製造中 → 完成報告受領 → 入庫依頼済 → 納品完了</p>`;
+  h+= active.length?orderCards(active):`<div class="empty">進行中の案件はありません。</div>`;
+  h+=`</div>`;
+  if(done.length){ h+=`<div class="card"><h2>納品完了<span class="cnt">${done.length}</span></h2>${orderCards(done,true)}</div>`; }
+  document.getElementById("v-orders").innerHTML=h;
+}
+function openOrder(pid){
+  const sel=document.getElementById("oProd");
+  sel.innerHTML=activeProds().map(p=>`<option value="${p.pid}" ${p.pid===pid?"selected":""}>${esc(p.name)}（${esc(p.vendor)}／LT約${p.lt}日）</option>`).join("");
+  document.getElementById("oDate").value=today();
+  ["oQty","oMat","oMemo"].forEach(i=>document.getElementById(i).value="");
+  document.getElementById("dlgOrder").showModal();
+}
+function submitOrder(){
+  const pid=document.getElementById("oProd").value;
+  const p=prod(pid); if(!p) return;
+  document.getElementById("dlgOrder").close();
+  mutate({action:"addOrder",pid,pname:p.name,
+    date:document.getElementById("oDate").value, qty:document.getElementById("oQty").value,
+    mat:document.getElementById("oMat").value, memo:document.getElementById("oMemo").value},"発注を登録しました");
+}
+function moveStatus(oid,dir){
+  const o=(S.orders||[]).find(x=>x.oid===oid); if(!o)return;
+  const i=STATUSES.indexOf(o.status)+dir;
+  if(i<0||i>=STATUSES.length)return;
+  mutate({action:"updateOrder",oid,status:STATUSES[i]}, STATUSES[i]+(dir>0?" に進めました":" に戻しました"));
+}
+function delOrder(oid){
+  if(!confirm("この案件を削除しますか？"))return;
+  mutate({action:"deleteOrder",oid},"削除しました");
+}
+
+// ================= 予測・発注点 =================
+function rFcast(){
+  const act=activeProds(), ret=S.master.filter(p=>p.status==="終売");
+  const maxv=Math.max(1,...act.flatMap(p=>[...salesOf(p.pid),...forecast(p.pid).preds]));
+  let h=`<div class="card"><h2>販売予測と発注点</h2>
+  <p class="note" style="margin-bottom:12px">予測＝直近3か月平均＋増減傾向。発注点＝月平均販売 ×（リードタイム月数＋安全在庫${safety()}か月）。在庫は入出庫ログから自動計算されます（修正は「入出庫」タブの棚卸調整から）。</p>
+  <div class="scroll"><table><tr>
+    <th class="sticky1">商品</th><th>実績12か月｜予測3か月</th><th>月平均</th><th>傾向</th><th>予測(来月〜)</th><th>在庫</th><th>発注点</th><th>在庫残</th><th>判定</th></tr>`;
+  act.forEach(p=>{
+    const r=reorderInfo(p), s=salesOf(p.pid);
+    const bars=s.map(v=>`<i style="height:${Math.max(2,v/maxv*30)}px" title="${v}"></i>`).join("")
+      +`<span class="sep"></span>`
+      +r.preds.map(v=>`<i class="pred" style="height:${Math.max(2,v/maxv*30)}px" title="予測:${v}"></i>`).join("");
+    const trend=!r.enough?"－":r.slope>0.5?"↗ 増加":r.slope<-0.5?"↘ 減少":"→ 横ばい";
+    const judge=r.status==="alert"?`<span class="tag alert">★ 要発注</span>`
+      :r.status==="soon"?`<span class="tag soon">まもなく</span>`
+      :r.status==="ok"?`<span class="tag ok">OK</span>`
+      :r.status==="na"?`<span class="tag gray">対象外</span>`:`<span class="tag gray">実績不足</span>`;
+    h+=`<tr><td class="sticky1"><b>${esc(p.name)}</b><br><span class="note">LT約${p.lt}日</span></td>
+      <td><div class="spark">${bars}</div></td>
+      <td>${r.avg3}</td><td>${trend}</td><td>${r.preds.join(" / ")}</td>
+      <td><b>${r.stock}</b></td><td>${r.point}</td><td>${r.monthsLeft!==null?r.monthsLeft+"か月":"－"}</td><td>${judge}</td></tr>`;
+  });
+  ret.forEach(p=>{
+    const st=S.stock[p.pid]||0;
+    h+=`<tr class="dim"><td class="sticky1"><b>${esc(p.name)}</b><br><span class="note">終売</span></td>
+      <td colspan="4"><span class="note">出庫のみ・売切り管理</span></td>
+      <td><b>${st}</b></td><td>－</td><td>－</td><td><span class="tag gray">終売</span></td></tr>`;
+  });
+  h+=`</table></div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--ink);opacity:.82"></span>実績</span>
+    <span><span class="sw" style="border:1.5px dashed var(--border-strong)"></span>予測</span>
+    <span><span class="tag alert" style="padding:1px 8px">★ 要発注</span>在庫が発注点以下</span>
+    <span><span class="tag soon" style="padding:1px 8px">まもなく</span>残りがLT＋1か月以内</span>
+  </div></div>`;
+  document.getElementById("v-fcast").innerHTML=h;
+}
+
+// ================= 入出庫 =================
+let ioType="出庫";
+function rIO(){
+  const user=store.get("pbuser")||"";
+  let h=`<div class="card"><h2>入出庫の登録</h2>
+  <div class="seg">
+    ${["出庫","入庫","棚卸調整"].map(t=>`<button class="${ioType===t?'on':''}" onclick="setIoType('${t}')">${t}</button>`).join("")}
+  </div>
+  <p class="note" style="margin-bottom:12px">${
+    ioType==="入庫" ? "納品（横浜冷凍等への入庫）時に製造部が登録します。"
+    : ioType==="出庫" ? "出庫依頼と同時に本店精肉が登録します。登録＝依頼の記録になります。"
+    : "棚卸で実在庫と差が出たときに、差分（＋／−）を登録して在庫を合わせます。"}</p>
+  <div class="frm">
+    <label class="wide">商品<select id="ioProd">${ioProdOptions()}</select></label>
+    <label>日付<input type="date" id="ioDate" value="${today()}"></label>
+    <label>数量${ioType==="棚卸調整"?"（＋／−）":""}<input type="number" id="ioQty" ${ioType==="棚卸調整"?'placeholder="例: -5"':'min="1" placeholder="例: 30"'}></label>`;
+  if(ioType==="入庫"){
+    h+=`<label>ロットNo（任意）<input type="text" id="ioLot"></label>
+    <label>出庫期限（任意）<input type="date" id="ioExp"></label>`;
+  }
+  h+=`<label>登録者<input type="text" id="ioUser" value="${esc(user)}" placeholder="例: 塚越"></label>
+    <label class="wide">備考（任意）<input type="text" id="ioMemo"></label>
+  </div>
+  <div style="margin-top:14px"><button class="btn" onclick="submitLog()">${ioType}を登録する</button></div>
+  </div>`;
+
+  h+=`<div class="card"><h2>直近の入出庫<span class="cnt">${(S.recentLogs||[]).length}</span></h2>`;
+  if(!(S.recentLogs||[]).length){ h+=`<div class="empty">まだ記録がありません。</div>`; }
+  else{
+    h+=`<div class="loglist">`;
+    S.recentLogs.forEach(l=>{
+      const tg = l.type==="入庫"?`<span class="tag ok">入庫</span>`:l.type==="出庫"?`<span class="tag soon">出庫</span>`:`<span class="tag gray">調整</span>`;
+      h+=`<div class="logrow"><span class="d">${esc(String(l.date).slice(0,10))}</span>${tg}
+        <span class="p">${esc(l.pname)}</span><span class="q">${esc(l.qty)}</span>
+        <span class="u">${esc(l.user||"")}</span></div>`;
+    });
+    h+=`</div>`;
+  }
+  h+=`</div>`;
+  document.getElementById("v-io").innerHTML=h;
+}
+function ioProdOptions(){
+  let list;
+  if(ioType==="入庫") list=activeProds();
+  else if(ioType==="出庫") list=[...activeProds(),...retiredWithStock()];
+  else list=S.master;
+  return list.map(p=>`<option value="${p.pid}">${esc(p.name)}${p.status==="終売"?"（終売・残"+(S.stock[p.pid]||0)+"）":"（在庫 "+(S.stock[p.pid]||0)+"）"}</option>`).join("");
+}
+function setIoType(t){ ioType=t; rIO(); }
+function submitLog(){
+  const pid=document.getElementById("ioProd").value;
+  const p=prod(pid); if(!p){ alert("商品を選択してください。"); return; }
+  const qty=Number(document.getElementById("ioQty").value);
+  if(!qty){ alert("数量を入力してください。"); return; }
+  if(ioType!=="棚卸調整" && qty<0){ alert("数量は正の数で入力してください。"); return; }
+  const stock=S.stock[pid]||0;
+  if(ioType==="出庫" && qty>stock && !confirm(`在庫（${stock}）を超える出庫数です。このまま登録しますか？`)) return;
+  const user=document.getElementById("ioUser").value.trim();
+  store.set("pbuser",user);
+  const lotEl=document.getElementById("ioLot"), expEl=document.getElementById("ioExp");
+  const payload={action:"addLog",type:ioType==="棚卸調整"?"調整":ioType,pid,pname:p.name,
+    date:document.getElementById("ioDate").value, qty,
+    lot:lotEl?lotEl.value:"", expiry:expEl?expEl.value:"",
+    memo:document.getElementById("ioMemo").value, user};
+  mutate(payload, ioType+"を登録しました");
+}
+
+// ================= マスタ =================
+let editPid=null;
+function rMaster(){
+  const sorted=[...S.master].sort((a,b)=>(a.status==="販売中"?0:1)-(b.status==="販売中"?0:1)||a.pid.localeCompare(b.pid));
+  let h=`<div class="card"><h2>商品マスタ<span class="cnt">${S.master.length}</span></h2>
+  <div style="margin-bottom:12px"><button class="btn" onclick="openProd()">＋ 商品を追加</button></div>
+  <p class="note" style="margin-bottom:12px">終売にすると、発注アラート・発注登録の対象から外れます（在庫がある間は出庫できます）。履歴は削除されません。</p>
+  <div class="plist">`;
+  sorted.forEach(p=>{
+    const st=S.stock[p.pid]||0;
+    h+=`<div class="pcard ${p.status==='終売'?'retired':''}">
+      <div class="phead"><div class="pn">${esc(p.name)} ${p.status==="販売中"?'<span class="tag ok">販売中</span>':'<span class="tag gray">終売</span>'}</div>
+      <span class="note">${esc(p.pid)}</span></div>
+      <div class="pdetail">窓口：<b>${esc(p.vendor)}</b>（製造：${esc(p.maker)}）　LT：<b>${p.lt?("約"+p.lt+"日"):"－"}</b>　納品先：${esc(p.dest)}　在庫：<b>${st}</b>${p.memo?`<br>備考：${esc(p.memo)}`:""}</div>
+      <div class="pbtns">
+        <button class="btn sub sm" onclick="openProd('${p.pid}')">編集</button>
+        <button class="btn sub sm" onclick="toggleStatus('${p.pid}')">${p.status==="販売中"?"終売にする":"販売中に戻す"}</button>
+        <button class="btn ghost sm" onclick="removeProd('${p.pid}')">削除</button>
+      </div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  document.getElementById("v-master").innerHTML=h;
+}
+function openProd(pid){
+  editPid=pid||null;
+  const p=pid?prod(pid):null;
+  document.getElementById("pdTitle").textContent=p?"商品を編集":"商品を追加";
+  const set=(id,v)=>document.getElementById(id).value=v==null?"":v;
+  set("pName",p&&p.name); set("pCat",p&&p.cat); set("pTrigger",p&&p.trigger); set("pVendor",p&&p.vendor);
+  set("pMaker",p&&p.maker); set("pMaterial",p&&p.material); set("pDest",(p&&p.dest)||"横浜冷凍");
+  set("pLt",(p&&p.lt)||""); set("pMemo",p&&p.memo);
+  document.getElementById("pStatus").value=(p&&p.status)||"販売中";
+  document.getElementById("pReport").value=(p&&p.report)||"なし";
+  document.getElementById("dlgProd").showModal();
+}
+function submitProduct(){
+  const g=id=>document.getElementById(id).value.trim();
+  if(!g("pName")){ alert("商品名を入力してください。"); return; }
+  const product={name:g("pName"),cat:g("pCat"),status:document.getElementById("pStatus").value,
+    trigger:g("pTrigger"),vendor:g("pVendor"),maker:g("pMaker"),material:g("pMaterial"),
+    dest:g("pDest"),lt:Number(g("pLt"))||0,report:document.getElementById("pReport").value,memo:g("pMemo")};
+  document.getElementById("dlgProd").close();
+  if(editPid) mutate({action:"updateProduct",pid:editPid,product},"商品を更新しました");
+  else mutate({action:"addProduct",product},"商品を追加しました");
+}
+function toggleStatus(pid){
+  const p=prod(pid); if(!p)return;
+  const to=p.status==="販売中"?"終売":"販売中";
+  if(!confirm(`「${p.name}」を${to}にしますか？`))return;
+  mutate({action:"updateProduct",pid,product:Object.assign({},p,{status:to})},to+"にしました");
+}
+function removeProd(pid){
+  const p=prod(pid); if(!p)return;
+  if(!confirm(`「${p.name}」をマスタから削除しますか？\n入出庫の履歴は残ります。誤登録の取り消し以外は「終売にする」の使用をおすすめします。`))return;
+  mutate({action:"deleteProduct",pid},"削除しました");
+}
+
+// ================= 控え保存 =================
+function exportJSON(){
+  const blob=new Blob([JSON.stringify({state:S,local:GAS_URL?undefined:LOCAL},null,1)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="pb管理データ控え_"+today()+".json";
+  a.click(); toast("控えを書き出しました");
+}
+
+// ================= 起動 =================
+(async function boot(){
+  if(GAS_URL){
+    loadCache(); syncUI(); tab("dash");
+    await refresh();
+  } else {
+    loadLocal(); buildStateLocal(); syncUI(); tab("dash");
+  }
+})();
+</script>
+</body>
+</html>

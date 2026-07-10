@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>PB受発注管理 スモークテスト</title>
+<style>
+body{font-family:"Hiragino Sans","Noto Sans JP",sans-serif;background:#f5f5f3;color:#1a1a18;padding:20px;max-width:900px;margin:0 auto}
+h1{font-size:1.1rem;margin-bottom:4px}
+.note{color:#6b6b68;font-size:.85rem;margin-bottom:16px}
+#summary{font-weight:800;font-size:1.05rem;margin:14px 0;padding:10px 14px;border-radius:8px}
+#summary.pass{background:#1a1a18;color:#fff}
+#summary.fail{background:#fff;color:#1a1a18;border:2px solid #1a1a18}
+ul{list-style:none;padding:0}
+li{padding:8px 10px;border-bottom:1px solid #e0e0de;font-size:.88rem;font-variant-numeric:tabular-nums}
+li.ok::before{content:"OK  ";font-weight:800}
+li.ng{background:#efefed}
+li.ng::before{content:"NG  ";font-weight:800}
+li .detail{color:#6b6b68;font-size:.78rem;display:block;margin-top:2px}
+iframe{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px}
+</style>
+</head>
+<body>
+<h1>PB商品受発注管理 スモークテスト</h1>
+<p class="note">index.html をiframeでローカル試用モード起動し、在庫計算・発注点ロジック・予測・工程遷移・マスタCRUD・終売除外を検証します。Node環境が無いためブラウザ内で実行する方式です（Claude Codeのpreview_startで開いて確認）。</p>
+<div id="summary">実行中…</div>
+<ul id="results"></ul>
+<iframe id="fr" src="../index.html"></iframe>
+<script>
+localStorage.clear();
+
+const results = [];
+function test(name, fn) {
+  try {
+    fn();
+    results.push({name, ok:true});
+  } catch (e) {
+    results.push({name, ok:false, detail: e.message});
+  }
+}
+function assertEq(actual, expected, label) {
+  if (actual !== expected) throw new Error((label||'')+` expected=${JSON.stringify(expected)} actual=${JSON.stringify(actual)}`);
+}
+function assertTrue(cond, label) {
+  if (!cond) throw new Error(label||'assertion failed');
+}
+
+document.getElementById('fr').addEventListener('load', () => {
+  const win = document.getElementById('fr').contentWindow;
+
+  // index.htmlはS/LOCAL/STATUSESをletまたはconstで宣言しておりwindowのプロパティにならないため、
+  // evalでその場のグローバルスコープにアクセスするブリッジ関数を1回だけ注入する
+  win.eval(`
+    window.__getS = function(){ return S; };
+    window.__getLOCAL = function(){ return LOCAL; };
+    window.__getSTATUSES = function(){ return STATUSES; };
+  `);
+
+  // ---- 在庫計算：入庫・出庫・調整の積み上げ ----
+  test('在庫計算：入庫-出庫+調整', () => {
+    win.__getLOCAL().logs = [];
+    win.localMutate({action:'addLog', type:'入庫', pid:'P01', pname:'GPコロッケ', qty:100, date:'2026-01-01'});
+    win.localMutate({action:'addLog', type:'出庫', pid:'P01', pname:'GPコロッケ', qty:30, date:'2026-01-02'});
+    win.localMutate({action:'addLog', type:'調整', pid:'P01', pname:'GPコロッケ', qty:-5, date:'2026-01-03'});
+    win.buildStateLocal();
+    assertEq(win.__getS().stock['P01'], 65, '在庫');
+  });
+
+  // ---- 発注点ロジック：alert / soon / ok / nodata / na ----
+  test('発注点ロジック：alert判定（在庫が発注点以下）', () => {
+    const p = {pid:'T1', status:'販売中', lt:30};
+    win.__getS().monthly['T1'] = {};
+    win.__getS().monthly['T1'][win.ym(-2)] = 30;
+    win.__getS().monthly['T1'][win.ym(-1)] = 30;
+    win.__getS().monthly['T1'][win.ym(0)] = 30;
+    win.__getS().stock['T1'] = 40; // avg3=30, LT30日→1か月, 安全0.5 → 発注点=ceil(30*1.5)=45
+    const r = win.reorderInfo(p);
+    assertEq(r.point, 45, '発注点');
+    assertEq(r.status, 'alert', '判定');
+  });
+
+  test('発注点ロジック：soon判定（残り月数がLT+安全+0.5以下）', () => {
+    const p = {pid:'T2', status:'販売中', lt:30};
+    win.__getS().monthly['T2'] = {};
+    win.__getS().monthly['T2'][win.ym(-2)] = 30;
+    win.__getS().monthly['T2'][win.ym(-1)] = 30;
+    win.__getS().monthly['T2'][win.ym(0)] = 30;
+    win.__getS().stock['T2'] = 50; // 発注点45は超えるが monthsLeft=50/30=1.67 <= 1+0.5+0.5=2.0
+    const r = win.reorderInfo(p);
+    assertEq(r.status, 'soon', '判定');
+  });
+
+  test('発注点ロジック：ok判定（在庫十分）', () => {
+    const p = {pid:'T3', status:'販売中', lt:30};
+    win.__getS().monthly['T3'] = {};
+    win.__getS().monthly['T3'][win.ym(-2)] = 30;
+    win.__getS().monthly['T3'][win.ym(-1)] = 30;
+    win.__getS().monthly['T3'][win.ym(0)] = 30;
+    win.__getS().stock['T3'] = 200;
+    const r = win.reorderInfo(p);
+    assertEq(r.status, 'ok', '判定');
+  });
+
+  test('発注点ロジック：実績3か月未満はnodata', () => {
+    const p = {pid:'T4', status:'販売中', lt:30};
+    win.__getS().monthly['T4'] = {};
+    win.__getS().monthly['T4'][win.ym(0)] = 30; // 1か月分のみ
+    win.__getS().stock['T4'] = 10;
+    const r = win.reorderInfo(p);
+    assertEq(r.status, 'nodata', '判定');
+  });
+
+  test('発注点ロジック：終売・LT未設定はna（対象外）', () => {
+    const p1 = {pid:'T5', status:'終売', lt:30};
+    const p2 = {pid:'T6', status:'販売中', lt:0};
+    assertEq(win.reorderInfo(p1).status, 'na', '終売');
+    assertEq(win.reorderInfo(p2).status, 'na', 'LT未設定');
+  });
+
+  // ---- 予測：直近3か月平均＋傾き ----
+  test('予測：増加トレンドでslope>0', () => {
+    win.__getS().monthly['T7'] = {};
+    const vals = [10,15,20,25,30,35];
+    for (let i=0;i<6;i++) win.__getS().monthly['T7'][win.ym(i-5)] = vals[i];
+    const f = win.forecast('T7');
+    assertEq(f.avg3, 30, '直近3か月平均');
+    assertTrue(f.slope > 0, '傾きが正');
+    assertTrue(f.enough, '実績十分フラグ');
+  });
+
+  // ---- 工程遷移：STATUSES順序と前進／後退 ----
+  test('工程遷移：STATUSES定義（7工程）', () => {
+    const STATUSES = win.__getSTATUSES();
+    assertEq(STATUSES.length, 7, '工程数');
+    assertEq(STATUSES[0], '発注済', '先頭工程');
+    assertEq(STATUSES[6], '納品完了', '最終工程');
+  });
+
+  test('工程遷移：次の工程へ／戻す', () => {
+    win.__getLOCAL().orders = [{oid:'OTEST', pid:'P01', pname:'GPコロッケ', date:'2026-01-01', qty:100, mat:'', status:'発注済', memo:'', updated:''}];
+    win.buildStateLocal();
+    win.moveStatus('OTEST', 1);
+    assertEq(win.__getS().orders.find(o=>o.oid==='OTEST').status, '原料手配中', '前進後');
+    win.moveStatus('OTEST', -1);
+    assertEq(win.__getS().orders.find(o=>o.oid==='OTEST').status, '発注済', '後退後');
+  });
+
+  test('工程遷移：境界（先頭で戻す／末尾で進める）は変化しない', () => {
+    win.__getLOCAL().orders = [
+      {oid:'OFIRST', pid:'P01', pname:'x', date:'2026-01-01', qty:1, mat:'', status:'発注済', memo:'', updated:''},
+      {oid:'OLAST', pid:'P01', pname:'x', date:'2026-01-01', qty:1, mat:'', status:'納品完了', memo:'', updated:''}
+    ];
+    win.buildStateLocal();
+    win.moveStatus('OFIRST', -1);
+    assertEq(win.__getS().orders.find(o=>o.oid==='OFIRST').status, '発注済', '先頭で戻す');
+    win.moveStatus('OLAST', 1);
+    assertEq(win.__getS().orders.find(o=>o.oid==='OLAST').status, '納品完了', '末尾で進める');
+  });
+
+  // ---- マスタCRUD ----
+  test('マスタCRUD：追加時にP番号を自動採番', () => {
+    const before = win.__getLOCAL().master.length;
+    win.localMutate({action:'addProduct', product:{name:'テスト商品', cat:'test', status:'販売中', lt:'10'}});
+    win.buildStateLocal();
+    const local = win.__getLOCAL();
+    assertEq(local.master.length, before+1, '件数');
+    const added = local.master[local.master.length-1];
+    assertEq(added.pid, 'P20', '採番（SEED最大P19の次）');
+  });
+
+  test('マスタCRUD：更新と削除', () => {
+    win.localMutate({action:'updateProduct', pid:'P20', product:{name:'テスト商品改', cat:'test', status:'販売中', lt:'10'}});
+    win.buildStateLocal();
+    assertEq(win.prod('P20').name, 'テスト商品改', '更新後の名前');
+    win.localMutate({action:'deleteProduct', pid:'P20'});
+    win.buildStateLocal();
+    assertEq(win.prod('P20'), undefined, '削除後');
+  });
+
+  // ---- 終売除外 ----
+  test('終売除外：activeProdsは終売品を含まない', () => {
+    assertTrue(win.activeProds().every(p => p.status === '販売中'), '販売中のみ');
+    assertTrue(!win.activeProds().some(p => p.pid === 'P15'), '終売P15を除外');
+  });
+
+  test('終売除外：retiredWithStockは在庫>0の終売品のみ', () => {
+    win.__getS().stock['P15'] = 34;
+    win.__getS().stock['P17'] = 0;
+    const rw = win.retiredWithStock();
+    assertTrue(rw.some(p => p.pid === 'P15'), '在庫ありの終売品P15を含む');
+    assertTrue(!rw.some(p => p.pid === 'P17'), '在庫0の終売品P17は含まない');
+  });
+
+  // ---- 結果表示 ----
+  const ul = document.getElementById('results');
+  let okCount = 0;
+  results.forEach(r => {
+    const li = document.createElement('li');
+    li.className = r.ok ? 'ok' : 'ng';
+    li.textContent = r.name;
+    if (!r.ok) {
+      const d = document.createElement('span');
+      d.className = 'detail';
+      d.textContent = r.detail;
+      li.appendChild(d);
+    } else okCount++;
+    ul.appendChild(li);
+  });
+  const summary = document.getElementById('summary');
+  summary.textContent = `${okCount} / ${results.length} 件成功`;
+  summary.className = okCount === results.length ? 'pass' : 'fail';
+  console.log(`[SMOKE] ${okCount}/${results.length} passed`);
+  results.filter(r=>!r.ok).forEach(r => console.error(`[SMOKE][NG] ${r.name}: ${r.detail}`));
+});
+</script>
+</body>
+</html>
